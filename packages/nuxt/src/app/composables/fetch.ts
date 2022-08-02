@@ -11,6 +11,7 @@ export interface UseFetchOptions<
   Transform extends _Transform<DataT, any> = _Transform<DataT, DataT>,
   PickKeys extends KeyOfRes<Transform> = KeyOfRes<Transform>
 > extends AsyncDataOptions<DataT, Transform, PickKeys>, FetchOptions {
+  uri?: Record<string, Ref<any> | any | (() => any)>
   key?: string
 }
 
@@ -46,13 +47,37 @@ export function useFetch<
     throw new Error('[nuxt] [useFetch] request is missing.')
   }
   const key = '$f' + _key
+  const uri = Object.keys(opts.uri ?? {})
 
-  const _request = computed(() => {
+  const _rawRequest = computed(() => {
     let r = request
     if (typeof r === 'function') {
       r = r()
     }
-    return (isRef(r) ? r.value : r)
+    return isRef(r) ? r.value : r
+  })
+  const _request = computed(() => {
+    let r = _rawRequest.value
+
+    for (const uriKey of uri) {
+      let val = opts.uri[uriKey]
+      if (typeof val === 'function') {
+        val = val()
+      }
+      val = isRef(val) ? val.value : val
+
+      if (typeof r === 'string') {
+        r = r.replace(`:${uriKey}`, `${val}`) as ReqT
+      } else {
+        // not sure when we can get here
+        r = {
+          ...(r as any),
+          url: r.url.replace(`:${uriKey}`, `${val}`)
+        }
+      }
+    }
+
+    return r
   })
 
   const {
